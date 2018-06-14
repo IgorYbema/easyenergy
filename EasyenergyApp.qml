@@ -1,0 +1,171 @@
+import QtQuick 1.1
+import qb.components 1.0
+import qb.base 1.0
+import "easyenergy.js" as EasyenergyJS 
+
+
+App {
+	id: root
+	// These are the URL's for the QML resources from which our widgets will be instantiated.
+	// By making them a URL type property they will automatically be converted to full paths,
+	// preventing problems when passing them around to code that comes from a different path.
+	property url trayUrl : "EasyenergyTray.qml";
+	property url tileUrl : "EasyenergyTile.qml";
+	property url thumbnailIcon: "./drawables/easyenergyIcon.png"
+	property url easyenergyScreenUrl : "EasyenergyScreen.qml"
+	property url easyenergySettingsUrl : "EasyenergySettings.qml"
+
+	property EasyenergySettings easyenergySettings
+	// these are the default settings
+	// for tax values see next site to update if it is changed
+	// https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/overige_belastingen/belastingen_op_milieugrondslag/tarieven_milieubelastingen/tabellen_tarieven_milieubelastingen
+	property variant settings: { 
+		"includeTax" : true, 
+		"tariffEnergyTax": 0.1046,
+		"tariffODETax": 0.0132,
+		"tariffVAT": 21,
+		"domoticzEnable": false, 
+		"domoticzHost": "domoticz.local",
+		"domoticzPort": "8080",
+		"domoticzIdx": "1",
+		"lookbackHours": 2,
+		"lookforwardHours": 18,
+		"scaleGraph": true,
+		"showColorinDim": true,
+	}
+
+	property variant tariffValues: [] // will contain the collected tariffs
+	property real minTariffValue // will contain the min tariff from the collected 
+	property real maxTariffValue // will contain the max tariff from the collected 
+	property real tariffQ1 // will contain the average low part of the collected (splicing the Q1 and Q2) 
+	property real tariffMedian // will contain the average low part of the collected (splicing the Q1 and Q2) 
+	property real tariffQ3 // will contain the average high part of the collected (splicing the Q3 and Q4)
+	property real currentTariffUsage // will contain the current tariff (usage)
+	property real currentTariffReturn // will contain the current tariff (return) *future use*
+	property int currentHour // will containt the current hour 
+	property int startHour  // will contain the start hour of the collected tariffs
+	property int datapoints // will contain the number of datapoints
+
+	function init() {
+		registry.registerWidget("screen", easyenergyScreenUrl, this);
+		registry.registerWidget("screen", easyenergySettingsUrl, this, "easyenergySettings");
+		// disable the systray for now                registry.registerWidget("systrayIcon", trayUrl, this, "easyenergyTray");
+		registry.registerWidget("tile", tileUrl, this, null, {thumbLabel: "EasyEnergy", thumbIcon: thumbnailIcon, thumbCategory: "general", thumbWeight: 30, baseTileWeight: 10, baseTileSolarWeight: 10, thumbIconVAlignment: "center"});
+	}
+
+	Component.onCompleted: {
+		// load the settings on completed is recommended instead of during init
+		loadSettings(); 
+	}
+
+	function loadSettings()  {
+		var settingsFile = new XMLHttpRequest();
+		settingsFile.onreadystatechange = function() {
+			if (settingsFile.readyState == XMLHttpRequest.DONE) {
+				if (settingsFile.responseText.length > 0)  {
+					var temp = JSON.parse(settingsFile.responseText);
+					for (var setting in settings) {
+						if (!temp[setting])  { temp[setting] = settings[setting]; } // use default if no saved setting exists
+					}
+					settings = temp;
+					collectTariffsTimer.interval = 10000; // set refresh of timer after 10 sec to get new tariffs in case of parameter changed after load
+				}
+			}
+		}
+		settingsFile.open("GET", "file:///HCBv2/qml/apps/easyenergy/easyenergy.settings", true);
+		settingsFile.send();
+
+
+	}
+
+	function updateDomoticz() {
+		var alertStatus = 4;
+		if (currentTariffUsage < tariffQ3) { alertStatus = 3; }
+		if (currentTariffUsage < tariffMedian) { alertStatus = 2; }
+		if (currentTariffUsage < tariffQ1) { alertStatus = 1; }
+		var request = ("http://"+settings.domoticzHost+":"+settings.domoticzPort+"/json.htm?type=command&param=udevice&idx="+settings.domoticzIdx+"&nvalue="+alertStatus+"&svalue="+normalizeTariff(currentTariffUsage))
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.open("GET", request, true);
+		xmlhttp.send();
+
+	}
+
+	function currentTextColor() {
+		// set tile text color based on calculated averages
+		var colorNow = "#FF0000";
+		if (currentTariffUsage < tariffQ3) { colorNow = "#FF6600"; } 
+		if (currentTariffUsage < tariffQ1) { colorNow = "#00FF00"; }
+		return colorNow;
+	}
+
+	function normalizeTariff(tariff) {
+		// adds tax to tariffs if requested and presents in euros with max 4 decimals
+		var normalizedTariff = (settings.includeTax) ? parseInt((settings.tariffEnergyTax + settings.tariffODETax + tariff) * ((settings.tariffVAT / 100)+1) * 10000)/10000 : parseInt(tariff * 10000)/10000 ;
+		return normalizedTariff;	
+	}
+
+	function getCurrentTariffs() {
+		var now = new Date();
+		currentHour = now.getHours();
+		startHour = currentHour - settings.lookbackHours; // start the graph at the start point set
+		now.setHours(startHour,0,0,0);
+		var endDate = new Date(now.getTime() + ((settings.lookforwardHours + settings.lookbackHours) * 3600 * 1000)); // end the graph at the end piont set
+
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.onreadystatechange=function() {
+			if (xmlhttp.readyState == 4) {
+				if (xmlhttp.status == 200) {
+					var res = xmlhttp.responseText;
+					var jsonRes = JSON.parse(res);
+					datapoints = jsonRes.length;
+					var tariffs = [];
+					minTariffValue = 1000;
+					maxTariffValue = 0;
+					// walk trhough the xml result and put the values into a temporary array
+					for (var i = 0; i < jsonRes.length; i++) {
+						// since a few weeks easyenergy includes tax in the reported tariffusage, so remove it first
+						tariffs[i] = (jsonRes[i].TariffUsage / ((settings.tariffVAT / 100) + 1) );
+						if (minTariffValue > tariffs[i]) {
+							minTariffValue = tariffs[i];
+						}
+						if (maxTariffValue < tariffs[i]) {
+							maxTariffValue = tariffs[i];
+						}
+					}
+					tariffValues = tariffs.slice(); // copy the collected tarrifs into the app property (somehow not possible without the tariffs array)
+
+					// calculate the quartiles for the low and high tariff 
+					var quartiles= EasyenergyJS.getQuartiles(tariffs);
+					tariffQ1 = quartiles[0];
+					tariffMedian = quartiles[1];
+					tariffQ3 = quartiles[2];
+
+					// set the current tariff and normalize
+					currentTariffUsage = tariffs[settings.lookbackHours];
+					if (settings.domoticzEnable) { updateDomoticz(); }
+				}
+			}
+		}
+		var urlAppend = "startTimestamp=" + encodeURIComponent(now.toISOString()) + "&endTimestamp=" + encodeURIComponent(endDate.toISOString());
+		var urlEasyEnergy = "https://mijn.easyenergy.com/nl/api/tariff/getapxtariffs?" + urlAppend;
+		xmlhttp.open("GET", urlEasyEnergy, true);
+		xmlhttp.send();
+	}
+
+
+	Timer {
+		id: collectTariffsTimer
+		interval: 300000
+		triggeredOnStart: true 
+		running: true
+		repeat: true
+		onTriggered: {
+			// update interval to only update at the start of the next hour
+			var now = new Date();
+			var secondsUntilNextHour = ((59 - now.getMinutes()) * 60) + (60 - now.getSeconds());
+			collectTariffsTimer.interval = secondsUntilNextHour * 1000;
+			getCurrentTariffs();
+		}
+	}
+
+}

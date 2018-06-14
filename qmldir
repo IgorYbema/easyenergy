@@ -1,0 +1,3 @@
+module apps.easyenergy
+easyenergyApp 1.0 easyenergyApp.qml
+easyenergyScreen 1.0 easyenergyScreen.qml
