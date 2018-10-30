@@ -65,7 +65,7 @@ App {
 				if (settingsFile.responseText.length > 0)  {
 					var temp = JSON.parse(settingsFile.responseText);
 					for (var setting in settings) {
-						if (!temp[setting])  { temp[setting] = settings[setting]; } // use default if no saved setting exists
+						if (temp[setting] === undefined )  { temp[setting] = settings[setting]; } // use default if no saved setting exists
 					}
 					settings = temp;
 					collectTariffsTimer.interval = 10000; // set refresh of timer after 10 sec to get new tariffs in case of parameter changed after load
@@ -144,11 +144,77 @@ App {
 					currentTariffUsage = tariffs[settings.lookbackHours];
 					if (settings.domoticzEnable) { updateDomoticz(); }
 				}
+				else {
+					console.log("Easyenergy URL fetch failed! Fetching using APX dashboard");
+					getCurrentTariffsAPX();
+				}
 			}
 		}
 		var urlAppend = "startTimestamp=" + encodeURIComponent(now.toISOString()) + "&endTimestamp=" + encodeURIComponent(endDate.toISOString());
 		var urlEasyEnergy = "https://mijn.easyenergy.com/nl/api/tariff/getapxtariffs?" + urlAppend;
 		xmlhttp.open("GET", urlEasyEnergy, true);
+		xmlhttp.send();
+	}
+	function getCurrentTariffsAPX() {
+		var now = new Date();
+		currentHour = now.getHours();
+		startHour = currentHour - settings.lookbackHours; // start the graph at the start point set
+		now.setHours(startHour,0,0,0);
+		var endDate = new Date(now.getTime() + ((settings.lookforwardHours + settings.lookbackHours) * 3600 * 1000)); // end the graph at the end piont set
+
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.onreadystatechange=function() {
+			if (xmlhttp.readyState == 4) {
+				if (xmlhttp.status == 200) {
+					var res = xmlhttp.responseText;
+					var jsonRes = JSON.parse(res);
+					var tariffsTemp = [];
+					minTariffValue = 1000;
+					maxTariffValue = 0;
+					for (var i = 0; i < jsonRes.quote.length; i++) {
+						var quoteDateApplied = jsonRes.quote[i].date_applied;
+						var quoteHour = jsonRes.quote[i].values[1].value;
+						var quotePrice = jsonRes.quote[i].values[3].value / 1000;
+						var quoteTime = quoteDateApplied + quoteHour * 3600000 // this works ok in winter time.. need to check this when it is summer time
+						var quoteTarrif = {timestamp: quoteTime, tariff: quotePrice};
+						if (quoteTime >= now.getTime() && quoteTime <= endDate.getTime() ) {
+							tariffsTemp.push(quoteTarrif);
+						}
+						
+					}
+					tariffsTemp.sort(function(a, b){return a.timestamp - b.timestamp});
+					datapoints = tariffsTemp.length;
+
+					var tariffs = [];
+                                        for (var i = 0; i < tariffsTemp.length; i++) {
+                                                tariffs[i] = tariffsTemp[i].tariff;
+                                                if (minTariffValue > tariffs[i]) {
+                                                        minTariffValue = tariffs[i];
+                                                }
+                                                if (maxTariffValue < tariffs[i]) {
+                                                        maxTariffValue = tariffs[i];
+                                                }
+                                        }
+
+					tariffValues = tariffs.slice();
+
+					// calculate the quartiles for the low and high tariff 
+					var quartiles= EasyenergyJS.getQuartiles(tariffs);
+					tariffQ1 = quartiles[0];
+					tariffMedian = quartiles[1];
+					tariffQ3 = quartiles[2];
+
+					// set the current tariff and normalize
+					currentTariffUsage = tariffs[settings.lookbackHours];
+					if (settings.domoticzEnable) { updateDomoticz(); }
+				}
+				else {
+					console.log("APX URL fetch failed!");
+				}
+			}
+		}
+		var urlAPX = "https://www.apxgroup.com/rest-api/quotes/APX%20Power%20NL%20Hourly?type=all&limit=3"
+		xmlhttp.open("GET", urlAPX, true);
 		xmlhttp.send();
 	}
 
