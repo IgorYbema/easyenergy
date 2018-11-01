@@ -175,7 +175,7 @@ App {
 						var quoteDateApplied = jsonRes.quote[i].date_applied;
 						var quoteHour = jsonRes.quote[i].values[1].value;
 						var quotePrice = jsonRes.quote[i].values[3].value / 1000;
-						var quoteTime = quoteDateApplied + quoteHour * 3600000 // this works ok in winter time.. need to check this when it is summer time
+						var quoteTime = quoteDateApplied + (quoteHour - 1) * 3600000 // this works ok in winter time.. need to check this when it is summer time
 						var quoteTarrif = {timestamp: quoteTime, tariff: quotePrice};
 						if (quoteTime >= now.getTime() && quoteTime <= endDate.getTime() ) {
 							tariffsTemp.push(quoteTarrif);

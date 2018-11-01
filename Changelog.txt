@@ -1,3 +1,9 @@
+1.3.1
+- APX hours offset by -1  corrected
+
+1.3.0
+- added APX dashboard fallback URL if easyenergy site does not work
+
 1.2.4
 - change to be compatible with 4.16 
 
