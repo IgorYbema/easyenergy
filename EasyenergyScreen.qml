@@ -5,7 +5,7 @@ import qb.components 1.0
 Screen {
 	id: easyenergyScreen
 
-	screenTitleIconUrl: "drawables/easyenergyIcon.png"
+	screenTitleIconUrl: "./drawables/easyenergyIcon.png"
 
 	screenTitle: "EasyEnergy"
 

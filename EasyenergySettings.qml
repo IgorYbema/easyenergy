@@ -280,7 +280,7 @@ Screen {
 	EditTextLabel {
 		id: energyTaxValueLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Energie belasting"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -315,7 +315,7 @@ Screen {
 	EditTextLabel {
 		id: odeTaxValueLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "ODE belasting"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -350,7 +350,7 @@ Screen {
 	EditTextLabel {
 		id: vatTaxValueLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "BTW percentage"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -386,7 +386,7 @@ Screen {
 	EditTextLabel {
 		id: lookBackValueLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Uren terug"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -422,7 +422,7 @@ Screen {
 	EditTextLabel {
 		id: lookForwardValueLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Uren vooruit"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -468,7 +468,7 @@ Screen {
 	EditTextLabel {
 		id: domoticzHostLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Host"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -503,7 +503,7 @@ Screen {
 	EditTextLabel {
 		id: domoticzPortLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Port"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
@@ -538,7 +538,7 @@ Screen {
 	EditTextLabel {
 		id: domoticzIdxLabel
 		width: isNxt ? 600 : 350
-		height: 35
+		height: isNxt ? 45 : 35
 		leftText: "Idx"
 		leftTextAvailableWidth: isNxt ? 400 : 200
 
